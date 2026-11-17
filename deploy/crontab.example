@@ -1,0 +1,2 @@
+# Roda 1x/dia às 06:00 UTC. Para aumentar a frequência, só mude a expressão (ex.: 0 */6 * * *).
+0 6 * * * cd /opt/cr-ingest && set -a && . ./.env && set +a && .venv/bin/python -m cr_ingest.main >> /var/log/cr-ingest.log 2>&1
