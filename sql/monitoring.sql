@@ -1,10 +1,17 @@
 -- Views de saúde e volumetria da ingestão (consumidas pelo painel do Looker Studio).
 -- Aplicar depois de schema.sql. Reexecutável: as views são recriadas.
 
-DROP VIEW IF EXISTS vw_ingestion_status, vw_run_summary, vw_player_health, vw_fetch_daily, vw_battle_gaps;
+CREATE SCHEMA IF NOT EXISTS monitoring;
+
+-- Nomes antigos (prefixo vw_ em public), removidos na migração para o schema monitoring.
+DROP VIEW IF EXISTS public.vw_ingestion_status, public.vw_run_summary, public.vw_player_health,
+                    public.vw_fetch_daily, public.vw_battle_gaps;
+
+DROP VIEW IF EXISTS monitoring.ingestion_status, monitoring.run_summary, monitoring.player_health,
+                    monitoring.fetch_daily, monitoring.battle_gaps;
 
 -- Uma linha: a situação atual, para o topo do painel.
-CREATE VIEW vw_ingestion_status AS
+CREATE VIEW monitoring.ingestion_status AS
 SELECT
     r.run_id                       AS last_run_id,
     r.started_at                   AS last_run_started_at,
@@ -18,12 +25,12 @@ SELECT
         WHEN r.status = 'partial' THEN 'parcial'
         ELSE 'ok'
     END                            AS health
-FROM (SELECT * FROM run_log ORDER BY started_at DESC LIMIT 1) r
-CROSS JOIN (SELECT max(finished_at) AS last_success_at FROM run_log
+FROM (SELECT * FROM public.run_log ORDER BY started_at DESC LIMIT 1) r
+CROSS JOIN (SELECT max(finished_at) AS last_success_at FROM public.run_log
             WHERE status IN ('success', 'partial')) s;
 
 -- Histórico de execuções.
-CREATE VIEW vw_run_summary AS
+CREATE VIEW monitoring.run_summary AS
 SELECT
     run_id,
     started_at,
@@ -38,10 +45,10 @@ SELECT
     new_battles_total,
     error_message,
     host
-FROM run_log;
+FROM public.run_log;
 
 -- Situação de cada jogador da watchlist.
-CREATE VIEW vw_player_health AS
+CREATE VIEW monitoring.player_health AS
 SELECT
     w.player_tag,
     w.is_active,
@@ -52,20 +59,20 @@ SELECT
     last_fetch.error_class         AS last_error_class,
     coalesce(recent.failures_7d, 0) AS failures_7d,
     coalesce(recent.fetches_7d, 0)  AS fetches_7d
-FROM players_watchlist w
+FROM public.players_watchlist w
 LEFT JOIN LATERAL (
-    SELECT status_code, error_class FROM fetch_log f
+    SELECT status_code, error_class FROM public.fetch_log f
     WHERE f.subject_tag = w.player_tag AND f.endpoint = 'battlelog'
     ORDER BY requested_at DESC LIMIT 1
 ) last_fetch ON true
 LEFT JOIN LATERAL (
     SELECT count(*) AS fetches_7d, count(*) FILTER (WHERE error_class IS NOT NULL) AS failures_7d
-    FROM fetch_log f
+    FROM public.fetch_log f
     WHERE f.subject_tag = w.player_tag AND f.requested_at > now() - interval '7 days'
 ) recent ON true;
 
 -- Agregado diário das chamadas, para gráficos de tendência.
-CREATE VIEW vw_fetch_daily AS
+CREATE VIEW monitoring.fetch_daily AS
 SELECT
     (requested_at AT TIME ZONE 'UTC')::date               AS day,
     endpoint,
@@ -79,13 +86,13 @@ SELECT
     sum(new_battles_count)                                 AS new_battles,
     count(*) FILTER (WHERE error_class = 'rate_limited')   AS rate_limited,
     count(*) FILTER (WHERE error_class IN ('timeout', 'network_error')) AS network_failures
-FROM fetch_log
+FROM public.fetch_log
 GROUP BY 1, 2;
 
 -- Possíveis lacunas: a API devolve só as batalhas mais recentes. Se TODAS as batalhas de uma
 -- coleta são novas (e não é a primeira coleta do jogador), batalhas antigas podem ter ficado
 -- de fora — sinal para aumentar a frequência do cron.
-CREATE VIEW vw_battle_gaps AS
+CREATE VIEW monitoring.battle_gaps AS
 SELECT
     subject_tag                                   AS player_tag,
     requested_at,
@@ -95,21 +102,21 @@ SELECT
 FROM (
     SELECT f.*,
            row_number() OVER (PARTITION BY subject_tag ORDER BY requested_at) AS fetch_number
-    FROM fetch_log f
+    FROM public.fetch_log f
     WHERE endpoint = 'battlelog' AND error_class IS NULL AND battles_count IS NOT NULL
 ) f
 WHERE fetch_number > 1
   AND battles_count > 0
   AND new_battles_count = battles_count;
 
--- Leitura para o Looker Studio: só as views, nunca as tabelas.
+-- Leitura para o Looker Studio: só o schema monitoring, nunca as tabelas.
 -- O papel looker_studio_reader é criado uma vez, fora deste script (a senha não fica no git):
 --   CREATE ROLE looker_studio_reader LOGIN PASSWORD '...';
 DO $$
 BEGIN
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'looker_studio_reader') THEN
-        GRANT USAGE ON SCHEMA public TO looker_studio_reader;
-        GRANT SELECT ON vw_ingestion_status, vw_run_summary, vw_player_health,
-                        vw_fetch_daily, vw_battle_gaps TO looker_studio_reader;
+        REVOKE USAGE ON SCHEMA public FROM looker_studio_reader;
+        GRANT USAGE ON SCHEMA monitoring TO looker_studio_reader;
+        GRANT SELECT ON ALL TABLES IN SCHEMA monitoring TO looker_studio_reader;
     END IF;
 END $$;
