@@ -5,7 +5,7 @@ import pytest
 
 from clash_royale_ingestion.errors import classify_status, is_retryable
 from clash_royale_ingestion.paths import battlelog_object_name
-from clash_royale_ingestion.repo import latest_battle_time
+from clash_royale_ingestion.repo import battle_stats
 from clash_royale_ingestion.tags import encode_tag, normalize_tag, tag_for_path
 
 
@@ -46,8 +46,14 @@ def test_object_name():
     )
 
 
-def test_latest_battle_time():
+def test_battle_stats():
     body = b'[{"battleTime":"20260101T120000.000Z"},{"battleTime":"20260102T080000.000Z"}]'
-    assert latest_battle_time(body) == datetime(2026, 1, 2, 8, 0, tzinfo=timezone.utc)
-    assert latest_battle_time(b"[]") is None
-    assert latest_battle_time(b"nao e json") is None
+    st = battle_stats(body, since=None)
+    assert (st.count, st.new_count) == (2, 2)
+    assert st.latest == datetime(2026, 1, 2, 8, 0, tzinfo=timezone.utc)
+    st = battle_stats(body, since=datetime(2026, 1, 1, 12, 0, tzinfo=timezone.utc))
+    assert st.new_count == 1  # a de 01/01 12:00 já tinha sido vista
+    empty = battle_stats(b"[]", since=None)
+    assert (empty.count, empty.new_count, empty.latest) == (0, 0, None)
+    assert battle_stats(b"nao e json", since=None) is None
+    assert battle_stats(b'{"reason":"x"}', since=None) is None

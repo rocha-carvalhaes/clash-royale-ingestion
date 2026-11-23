@@ -12,7 +12,7 @@ from .api import ClashRoyaleClient
 from .config import Config
 from .healthcheck import Healthcheck
 from .paths import battlelog_object_name
-from .repo import Repo, latest_battle_time
+from .repo import Repo, battle_stats
 from .storage import BronzeWriter
 
 log = logging.getLogger("clash_royale_ingestion")
@@ -31,6 +31,8 @@ class RunStats:
     tags_ok: int = 0
     tags_failed: int = 0
     bytes_total: int = 0
+    battles_total: int = 0
+    new_battles_total: int = 0
 
 
 def run_status(stats: RunStats, fatal: bool) -> tuple[str, int]:
@@ -47,12 +49,12 @@ def _ingest(cfg: Config, repo: Repo, run_id: str, stats: RunStats) -> str | None
     writer = BronzeWriter(cfg.gcs_bucket)
     api = ClashRoyaleClient(cfg.api_token, cfg.api_base, cfg.request_interval_s,
                             cfg.max_retries, cfg.timeout_s)
-    tags = repo.active_tags()
-    stats.tags_total = len(tags)
+    players = repo.active_players()
+    stats.tags_total = len(players)
     repo.update_run_total(run_id, stats.tags_total)
     _log("run_start", run_id=run_id, tags=stats.tags_total)
 
-    for tag in tags:
+    for tag, previous_battle_at in players:
         fetch_id = uuid.uuid4()
         requested_at = datetime.now(timezone.utc)
         res = api.battlelog(tag)
@@ -63,15 +65,21 @@ def _ingest(cfg: Config, repo: Repo, run_id: str, stats: RunStats) -> str | None
             except Exception as exc:  # falha no GCS não pode apagar o registro da chamada
                 error_class = "storage_error"
                 _log("storage_failed", tag=tag, error=repr(exc))
+        battles = battle_stats(res.body, previous_battle_at) if res.body is not None else None
         repo.log_fetch(fetch_id=fetch_id, endpoint="battlelog", subject_tag=tag,
                        run_id=run_id, requested_at=requested_at,
                        status_code=res.status_code, error_class=error_class,
                        latency_ms=res.latency_ms,
-                       bytes_=len(res.body) if res.body else None, gcs_uri=gcs_uri)
+                       bytes_=len(res.body) if res.body else None, gcs_uri=gcs_uri,
+                       battles_count=battles.count if battles else None,
+                       new_battles_count=battles.new_count if battles else None)
         if error_class is None:
-            repo.mark_fetched(tag, requested_at, latest_battle_time(res.body))
+            repo.mark_fetched(tag, requested_at, battles.latest if battles else None)
             stats.tags_ok += 1
             stats.bytes_total += len(res.body)
+            if battles:
+                stats.battles_total += battles.count
+                stats.new_battles_total += battles.new_count
             continue
         stats.tags_failed += 1
         _log("fetch_failed", tag=tag, status=res.status_code, error=error_class)
@@ -98,13 +106,13 @@ def run(cfg: Config) -> int:
     finally:
         if repo is not None:
             try:
-                repo.finish_run(run_id, status, stats.tags_ok, stats.tags_failed,
-                                stats.bytes_total, error_message)
+                repo.finish_run(run_id, status, stats, error_message)
             except Exception:
                 log.exception("falha ao gravar run_log")
             repo.close()
         summary = (f"run_id={run_id} status={status} ok={stats.tags_ok} "
-                   f"failed={stats.tags_failed}/{stats.tags_total}"
+                   f"failed={stats.tags_failed}/{stats.tags_total} "
+                   f"battles={stats.battles_total} new={stats.new_battles_total}"
                    + (f"\n{error_message}" if error_message else ""))
         _log("run_end", run_id=run_id, status=status, ok=stats.tags_ok,
              failed=stats.tags_failed, error=error_message)
