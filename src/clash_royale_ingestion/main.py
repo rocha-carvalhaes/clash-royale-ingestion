@@ -12,7 +12,7 @@ from .paths import battlelog_object_name
 from .repo import Repo, latest_battle_time
 from .storage import BronzeWriter
 
-log = logging.getLogger("cr_ingest")
+log = logging.getLogger("clash_royale_ingestion")
 
 
 def _log(event: str, **fields) -> None:

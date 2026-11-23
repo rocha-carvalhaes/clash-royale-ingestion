@@ -23,11 +23,11 @@ class Config:
             return v
 
         return cls(
-            api_token=req("CR_API_TOKEN"),
+            api_token=req("CLASH_ROYALE_API_TOKEN"),
             neon_dsn=req("NEON_DSN"),
             gcs_bucket=req("GCS_BUCKET"),
-            api_base=os.environ.get("CR_API_BASE", cls.api_base),
-            request_interval_s=float(os.environ.get("CR_REQUEST_INTERVAL_S", cls.request_interval_s)),
-            max_retries=int(os.environ.get("CR_MAX_RETRIES", cls.max_retries)),
-            timeout_s=float(os.environ.get("CR_TIMEOUT_S", cls.timeout_s)),
+            api_base=os.environ.get("CLASH_ROYALE_API_BASE", cls.api_base),
+            request_interval_s=float(os.environ.get("CLASH_ROYALE_REQUEST_INTERVAL_S", cls.request_interval_s)),
+            max_retries=int(os.environ.get("CLASH_ROYALE_MAX_RETRIES", cls.max_retries)),
+            timeout_s=float(os.environ.get("CLASH_ROYALE_TIMEOUT_S", cls.timeout_s)),
         )

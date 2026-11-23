@@ -3,10 +3,10 @@ from uuid import UUID
 
 import pytest
 
-from cr_ingest.errors import classify_status, is_retryable
-from cr_ingest.paths import battlelog_object_name
-from cr_ingest.repo import latest_battle_time
-from cr_ingest.tags import encode_tag, normalize_tag, tag_for_path
+from clash_royale_ingestion.errors import classify_status, is_retryable
+from clash_royale_ingestion.paths import battlelog_object_name
+from clash_royale_ingestion.repo import latest_battle_time
+from clash_royale_ingestion.tags import encode_tag, normalize_tag, tag_for_path
 
 
 def test_encode_tag():

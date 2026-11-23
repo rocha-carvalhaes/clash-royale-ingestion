@@ -1,5 +1,5 @@
 [project]
-name = "cr-ingest"
+name = "clash-royale-ingestion"
 version = "0.1.0"
 description = "Ingestão da camada bronze do battlelog do Clash Royale"
 requires-python = ">=3.11"

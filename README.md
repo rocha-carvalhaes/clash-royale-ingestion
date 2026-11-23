@@ -1,4 +1,4 @@
-# cr-ingest
+# clash-royale-ingestion
 
 Ingestão da camada bronze do `battlelog` do Clash Royale: cron → Python → GCS (bruto) + Neon (controle).
 
@@ -10,7 +10,7 @@ pytest
 ```
 
 ## Passos de implantação
-1. `PROJECT=... BUCKET=... ./infra/provision.sh` (cria IP estático, VM e2-micro, bucket com lifecycle).
+1. `PROJECT=clash-royale-ingestion BUCKET=clash-royale-raw-battlelog ./infra/provision.sh` (cria IP estático, VM e2-micro, bucket com lifecycle).
 2. Cadastrar o IP exibido em developer.clashroyale.com.
 3. Aplicar `sql/schema.sql` no Neon e inserir 2–3 tags em `players_watchlist`.
 4. Na VM: clonar, criar venv, copiar `.env.example` para `.env`, instalar `deploy/crontab.example`.

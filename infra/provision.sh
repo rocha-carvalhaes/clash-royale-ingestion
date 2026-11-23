@@ -7,8 +7,8 @@ set -euo pipefail
 : "${BUCKET:?defina BUCKET}"
 REGION=us-central1
 ZONE=us-central1-a   # free tier e2-micro: us-west1, us-central1 ou us-east1
-VM=cr-ingest-vm
-IP_NAME=cr-ingest-ip
+VM=clash-royale-ingestion-vm
+IP_NAME=clash-royale-ingestion-ip
 
 gcloud config set project "$PROJECT"
 

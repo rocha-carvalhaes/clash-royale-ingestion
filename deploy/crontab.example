@@ -1,2 +1,2 @@
 # Roda 1x/dia às 06:00 UTC. Para aumentar a frequência, só mude a expressão (ex.: 0 */6 * * *).
-0 6 * * * cd /opt/cr-ingest && set -a && . ./.env && set +a && .venv/bin/python -m cr_ingest.main >> /var/log/cr-ingest.log 2>&1
+0 6 * * * cd /opt/clash-royale-ingestion && set -a && . ./.env && set +a && .venv/bin/python -m clash_royale_ingestion.main >> /var/log/clash-royale-ingestion.log 2>&1
