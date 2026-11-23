@@ -23,4 +23,4 @@ def classify_status(status_code: int | None) -> str | None:
 
 
 def is_retryable(error_class: str | None) -> bool:
-    return error_class in {"timeout", "rate_limited", "server_error"}
+    return error_class in {"timeout", "network_error", "rate_limited", "server_error"}

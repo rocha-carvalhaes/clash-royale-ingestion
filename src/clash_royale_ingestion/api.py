@@ -52,6 +52,8 @@ class ClashRoyaleClient:
             resp = self._http.get(url)
         except httpx.TimeoutException:
             return FetchResult(None, "timeout", int((time.monotonic() - start) * 1000), None)
+        except httpx.TransportError:  # DNS, conexão recusada, TLS, conexão derrubada...
+            return FetchResult(None, "network_error", int((time.monotonic() - start) * 1000), None)
         latency = int((time.monotonic() - start) * 1000)
         err = classify_status(resp.status_code)
         return FetchResult(resp.status_code, err, latency, resp.content if err is None else None)

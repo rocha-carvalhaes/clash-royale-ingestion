@@ -37,6 +37,25 @@ class Repo:
             (fetched_at, last_battle_at, tag),
         )
 
+    def start_run(self, run_id: str, host: str) -> None:
+        self._conn.execute(
+            "INSERT INTO run_log (run_id, started_at, status, host) VALUES (%s, now(), 'running', %s)",
+            (run_id, host),
+        )
+
+    def update_run_total(self, run_id: str, tags_total: int) -> None:
+        self._conn.execute("UPDATE run_log SET tags_total = %s WHERE run_id = %s", (tags_total, run_id))
+
+    def finish_run(self, run_id: str, status: str, tags_ok: int, tags_failed: int,
+                   bytes_total: int, error_message: str | None) -> None:
+        self._conn.execute(
+            """UPDATE run_log
+               SET finished_at = now(), status = %s, tags_ok = %s, tags_failed = %s,
+                   bytes_total = %s, error_message = %s
+               WHERE run_id = %s""",
+            (status, tags_ok, tags_failed, bytes_total, error_message, run_id),
+        )
+
     def close(self) -> None:
         self._conn.close()
 

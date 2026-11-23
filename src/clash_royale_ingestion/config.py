@@ -13,6 +13,7 @@ class Config:
     request_interval_s: float = 0.2
     max_retries: int = 4
     timeout_s: float = 20.0
+    healthcheck_ping_url: str | None = None
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -30,4 +31,5 @@ class Config:
             request_interval_s=float(os.environ.get("CLASH_ROYALE_REQUEST_INTERVAL_S", cls.request_interval_s)),
             max_retries=int(os.environ.get("CLASH_ROYALE_MAX_RETRIES", cls.max_retries)),
             timeout_s=float(os.environ.get("CLASH_ROYALE_TIMEOUT_S", cls.timeout_s)),
+            healthcheck_ping_url=os.environ.get("HEALTHCHECK_PING_URL") or None,
         )
