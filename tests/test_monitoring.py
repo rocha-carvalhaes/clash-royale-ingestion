@@ -66,3 +66,33 @@ def test_healthcheck_disabled_without_url():
         raise AssertionError("não deveria pingar")
 
     Healthcheck(None, client=httpx.Client(transport=httpx.MockTransport(handler))).finish(2, "x")
+
+
+def test_connect_with_retry_recovers():
+    import psycopg
+    from clash_royale_ingestion.repo import connect_with_retry
+
+    attempts, waits = [], []
+
+    def flaky(dsn, **kw):
+        attempts.append(kw)
+        if len(attempts) < 3:
+            raise psycopg.OperationalError("Network is unreachable")
+        return "conn"
+
+    assert connect_with_retry("dsn", delays_s=(1, 2, 3), sleep=waits.append, connect=flaky) == "conn"
+    assert waits == [1, 2] and attempts[0]["connect_timeout"] == 15
+
+
+def test_connect_with_retry_gives_up():
+    import psycopg
+    import pytest
+    from clash_royale_ingestion.repo import connect_with_retry
+
+    def down(dsn, **kw):
+        raise psycopg.OperationalError("fora do ar")
+
+    waits = []
+    with pytest.raises(psycopg.OperationalError):
+        connect_with_retry("dsn", delays_s=(1, 2), sleep=waits.append, connect=down)
+    assert waits == [1, 2]

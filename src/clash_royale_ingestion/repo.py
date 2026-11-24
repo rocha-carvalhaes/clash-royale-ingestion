@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import logging
+import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from uuid import UUID
@@ -8,9 +10,28 @@ from uuid import UUID
 import psycopg
 
 
+log = logging.getLogger("clash_royale_ingestion")
+
+CONNECT_RETRY_DELAYS_S = (5, 15, 45)  # falhas de DNS/rede costumam ser momentâneas
+
+
+def connect_with_retry(dsn: str, delays_s=CONNECT_RETRY_DELAYS_S, sleep=time.sleep,
+                       connect=psycopg.connect) -> psycopg.Connection:
+    for attempt, delay in enumerate((*delays_s, None), start=1):
+        try:
+            return connect(dsn, autocommit=True, connect_timeout=15)
+        except psycopg.OperationalError as exc:
+            if delay is None:
+                raise
+            log.warning("conexão com o banco falhou (tentativa %d), nova tentativa em %ds: %s",
+                        attempt, delay, str(exc).splitlines()[0])
+            sleep(delay)
+    raise AssertionError("inalcançável")
+
+
 class Repo:
     def __init__(self, dsn: str):
-        self._conn = psycopg.connect(dsn, autocommit=True)
+        self._conn = connect_with_retry(dsn)
 
     def active_players(self) -> list[tuple[str, datetime | None]]:
         """(tag, last_battle_at) de cada jogador ativo."""
