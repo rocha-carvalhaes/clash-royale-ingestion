@@ -1,6 +1,6 @@
 -- Views de saúde e volumetria da ingestão, consumidas pelo painel do Data Studio.
--- São a camada de apresentação: colunas e valores já com nomes de exibição em inglês
--- ("Net cost", "Duration (s)"), para o painel não precisar renomear campo nenhum.
+-- Nomes de coluna em snake_case sem abreviação; os nomes de exibição ("Duration (s)") ficam nos
+-- campos das fontes do Data Studio: o conector PostgreSQL quebra ao agregar colunas com espaço.
 -- Aplicar depois de schema.sql. Reexecutável: as views são recriadas.
 
 CREATE SCHEMA IF NOT EXISTS monitoring;
@@ -33,16 +33,16 @@ SELECT
         WHEN r.status IN ('fatal', 'crashed') THEN 'Failing'
         WHEN r.status = 'partial' THEN 'Degraded'
         ELSE 'Healthy'
-    END                                                              AS "Health",
-    monitoring.run_status_label(r.status)                            AS "Last run status",
-    r.started_at                                                     AS "Last run at",
-    r.tags_ok                                                        AS "Players collected",
-    r.tags_total                                                     AS "Players expected",
-    r.new_battles_total                                              AS "New battles",
-    s.last_success_at                                                AS "Last success at",
-    round(extract(epoch FROM now() - s.last_success_at) / 3600, 1)   AS "Hours since last success",
-    r.error_message                                                  AS "Last error",
-    r.run_id                                                         AS "Run ID"
+    END                                                              AS health,
+    monitoring.run_status_label(r.status)                            AS last_run_status,
+    r.started_at                                                     AS last_run_at,
+    r.tags_ok                                                        AS players_collected,
+    r.tags_total                                                     AS players_expected,
+    r.new_battles_total                                              AS new_battles,
+    s.last_success_at                                                AS last_success_at,
+    round(extract(epoch FROM now() - s.last_success_at) / 3600, 1)   AS hours_since_last_success,
+    r.error_message                                                  AS last_error,
+    r.run_id                                                         AS run_id
 FROM (SELECT * FROM public.run_log ORDER BY started_at DESC LIMIT 1) r
 CROSS JOIN (SELECT max(finished_at) AS last_success_at FROM public.run_log
             WHERE status IN ('success', 'partial')) s;
@@ -50,33 +50,33 @@ CROSS JOIN (SELECT max(finished_at) AS last_success_at FROM public.run_log
 -- Histórico de execuções.
 CREATE VIEW monitoring.run_summary AS
 SELECT
-    started_at                                                       AS "Started at",
-    (started_at AT TIME ZONE 'America/Sao_Paulo')::date              AS "Date",
-    monitoring.run_status_label(status)                              AS "Status",
-    round(extract(epoch FROM finished_at - started_at)::numeric, 1)  AS "Duration (s)",
-    tags_total                                                       AS "Players expected",
-    tags_ok                                                          AS "Players collected",
-    tags_failed                                                      AS "Players failed",
-    battles_total                                                    AS "Battles fetched",
-    new_battles_total                                                AS "New battles",
-    round(bytes_total / 1048576.0, 2)                                AS "Data (MB)",
-    error_message                                                    AS "Error",
-    host                                                             AS "Host",
-    run_id                                                           AS "Run ID"
+    started_at                                                       AS started_at,
+    (started_at AT TIME ZONE 'America/Sao_Paulo')::date              AS date,
+    monitoring.run_status_label(status)                              AS status,
+    round(extract(epoch FROM finished_at - started_at)::numeric, 1)  AS duration_seconds,
+    tags_total                                                       AS players_expected,
+    tags_ok                                                          AS players_collected,
+    tags_failed                                                      AS players_failed,
+    battles_total                                                    AS battles_fetched,
+    new_battles_total                                                AS new_battles,
+    round(bytes_total / 1048576.0, 2)                                AS data_megabytes,
+    error_message                                                    AS error,
+    host                                                             AS host,
+    run_id                                                           AS run_id
 FROM public.run_log;
 
 -- Situação de cada jogador da watchlist.
 CREATE VIEW monitoring.player_health AS
 SELECT
-    w.player_tag                                                     AS "Player tag",
-    CASE WHEN w.is_active THEN 'Active' ELSE 'Paused' END            AS "Tracking",
-    w.last_fetched_at                                                AS "Last fetched at",
-    w.last_battle_at                                                 AS "Last battle at",
-    round(extract(epoch FROM now() - w.last_battle_at) / 86400, 1)   AS "Days since last battle",
+    w.player_tag                                                     AS player_tag,
+    CASE WHEN w.is_active THEN 'Active' ELSE 'Paused' END            AS tracking,
+    w.last_fetched_at                                                AS last_fetched_at,
+    w.last_battle_at                                                 AS last_battle_at,
+    round(extract(epoch FROM now() - w.last_battle_at) / 86400, 1)   AS days_since_last_battle,
     CASE WHEN last_fetch.error_class IS NULL THEN 'OK'
-         ELSE initcap(replace(last_fetch.error_class, '_', ' ')) END AS "Last fetch result",
-    coalesce(recent.fetches_7d, 0)                                   AS "Fetches (7 days)",
-    coalesce(recent.failures_7d, 0)                                  AS "Failures (7 days)"
+         ELSE initcap(replace(last_fetch.error_class, '_', ' ')) END AS last_fetch_result,
+    coalesce(recent.fetches_7d, 0)                                   AS fetches_last_7_days,
+    coalesce(recent.failures_7d, 0)                                  AS failures_last_7_days
 FROM public.players_watchlist w
 LEFT JOIN LATERAL (
     SELECT error_class FROM public.fetch_log f
@@ -92,18 +92,18 @@ LEFT JOIN LATERAL (
 -- Agregado diário das chamadas à API, para os gráficos de tendência.
 CREATE VIEW monitoring.fetch_daily AS
 SELECT
-    (requested_at AT TIME ZONE 'America/Sao_Paulo')::date            AS "Date",
-    initcap(endpoint)                                                AS "Endpoint",
-    count(*)                                                         AS "API calls",
-    count(*) FILTER (WHERE error_class IS NULL)                      AS "Successful calls",
-    count(*) FILTER (WHERE error_class IS NOT NULL)                  AS "Failed calls",
-    count(*) FILTER (WHERE error_class = 'rate_limited')             AS "Rate-limited calls",
-    count(*) FILTER (WHERE error_class IN ('timeout', 'network_error')) AS "Network failures",
-    round(avg(latency_ms))                                           AS "Average latency (ms)",
-    round(percentile_cont(0.95) WITHIN GROUP (ORDER BY latency_ms)::numeric) AS "95th percentile latency (ms)",
-    round(coalesce(sum(bytes), 0) / 1048576.0, 2)                    AS "Data (MB)",
-    sum(battles_count)                                               AS "Battles fetched",
-    sum(new_battles_count)                                           AS "New battles"
+    (requested_at AT TIME ZONE 'America/Sao_Paulo')::date            AS date,
+    initcap(endpoint)                                                AS endpoint,
+    count(*)                                                         AS api_calls,
+    count(*) FILTER (WHERE error_class IS NULL)                      AS successful_calls,
+    count(*) FILTER (WHERE error_class IS NOT NULL)                  AS failed_calls,
+    count(*) FILTER (WHERE error_class = 'rate_limited')             AS rate_limited_calls,
+    count(*) FILTER (WHERE error_class IN ('timeout', 'network_error')) AS network_failures,
+    round(avg(latency_ms))                                           AS average_latency_milliseconds,
+    round(percentile_cont(0.95) WITHIN GROUP (ORDER BY latency_ms)::numeric) AS percentile_95_latency_milliseconds,
+    round(coalesce(sum(bytes), 0) / 1048576.0, 2)                    AS data_megabytes,
+    sum(battles_count)                                               AS battles_fetched,
+    sum(new_battles_count)                                           AS new_battles
 FROM public.fetch_log
 GROUP BY 1, 2;
 
@@ -112,11 +112,11 @@ GROUP BY 1, 2;
 -- de fora — sinal para aumentar a frequência do cron.
 CREATE VIEW monitoring.battle_gaps AS
 SELECT
-    subject_tag                                                      AS "Player tag",
-    requested_at                                                     AS "Fetched at",
-    battles_count                                                    AS "Battles fetched",
-    new_battles_count                                                AS "New battles",
-    run_id                                                           AS "Run ID"
+    subject_tag                                                      AS player_tag,
+    requested_at                                                     AS fetched_at,
+    battles_count                                                    AS battles_fetched,
+    new_battles_count                                                AS new_battles,
+    run_id                                                           AS run_id
 FROM (
     SELECT f.*,
            row_number() OVER (PARTITION BY subject_tag ORDER BY requested_at) AS fetch_number
