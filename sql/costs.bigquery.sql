@@ -6,27 +6,28 @@ CREATE SCHEMA IF NOT EXISTS `clash-royale-ingestion.monitoring`
 OPTIONS (location = 'US', description = 'Views de custo do projeto para o painel');
 
 -- Custo diário por serviço e SKU, já com créditos (free tier, descontos) abatidos.
+-- Colunas com nomes de exibição em inglês, consumidas direto pelo painel do Data Studio.
 CREATE OR REPLACE VIEW `clash-royale-ingestion.monitoring.cost_daily` AS
 SELECT
-    DATE(usage_start_time, 'America/Sao_Paulo')                    AS day,
-    service.description                                            AS service,
-    sku.description                                                AS sku,
-    currency,
-    SUM(cost)                                                      AS gross_cost,
-    SUM(IFNULL((SELECT SUM(c.amount) FROM UNNEST(credits) c), 0))  AS credits,
-    SUM(cost) + SUM(IFNULL((SELECT SUM(c.amount) FROM UNNEST(credits) c), 0)) AS net_cost
+    DATE(usage_start_time, 'America/Sao_Paulo')                    AS `Date`,
+    service.description                                            AS `Service`,
+    sku.description                                                AS `SKU`,
+    currency                                                       AS `Currency`,
+    SUM(cost)                                                      AS `Gross cost`,
+    SUM(IFNULL((SELECT SUM(c.amount) FROM UNNEST(credits) c), 0))  AS `Credits`,
+    SUM(cost) + SUM(IFNULL((SELECT SUM(c.amount) FROM UNNEST(credits) c), 0)) AS `Net cost`
 FROM `clash-royale-ingestion.billing_export.gcp_billing_export_v1_0153B5_AA2658_4DA0D7`
 WHERE project.id = 'clash-royale-ingestion'
-GROUP BY day, service, sku, currency;
+GROUP BY 1, 2, 3, 4;
 
--- Uma linha: acumulado do mês corrente e acumulado total desde o início da exportação.
+-- Uma linha por moeda: acumulado do mês corrente e acumulado total desde o início da exportação.
 CREATE OR REPLACE VIEW `clash-royale-ingestion.monitoring.cost_summary` AS
 SELECT
-    currency,
-    SUM(IF(DATE_TRUNC(day, MONTH) = DATE_TRUNC(CURRENT_DATE('America/Sao_Paulo'), MONTH), net_cost, 0))
-                                   AS month_to_date_cost,
-    SUM(net_cost)                  AS total_cost,
-    MIN(day)                       AS first_day,
-    MAX(day)                       AS last_day
+    `Currency`,
+    SUM(IF(DATE_TRUNC(`Date`, MONTH) = DATE_TRUNC(CURRENT_DATE('America/Sao_Paulo'), MONTH), `Net cost`, 0))
+                                   AS `Month-to-date cost`,
+    SUM(`Net cost`)                AS `Total project cost`,
+    MIN(`Date`)                    AS `First billed day`,
+    MAX(`Date`)                    AS `Last billed day`
 FROM `clash-royale-ingestion.monitoring.cost_daily`
-GROUP BY currency;
+GROUP BY `Currency`;
