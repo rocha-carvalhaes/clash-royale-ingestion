@@ -1,0 +1,27 @@
+name: Bug
+description: Comportamento errado, falha de execução ou dado incorreto
+type: Bug
+body:
+  - type: textarea
+    id: sintoma
+    attributes:
+      label: Sintoma
+      description: O que aconteceu e o que era esperado? Inclua run_id, tag ou trecho de log, sem segredos.
+    validations:
+      required: true
+  - type: textarea
+    id: reproducao
+    attributes:
+      label: Como reproduzir
+  - type: textarea
+    id: pronto
+    attributes:
+      label: Critério de pronto
+      value: "- [ ] "
+    validations:
+      required: true
+  - type: textarea
+    id: impacto
+    attributes:
+      label: Impacto
+      description: Dados afetados, janela de tempo, necessidade de reprocessar.
