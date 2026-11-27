@@ -48,6 +48,10 @@ Exit codes de `main`: `0` sucesso · `1` falha parcial (alguma tag falhou) · `2
 
 `.env` não é versionado (use `.env.example` como modelo). O DSN do Neon contém `&`, então vai entre aspas simples. Nunca commitar token da API, DSN ou URL de ping do Healthchecks.
 
+## Registro de trabalho
+
+Todo trabalho novo (feature, bug, task, mudança de schema ou infra) é registrado no GitHub Issues: https://github.com/rocha-carvalhaes/clash-royale-ingestion/issues. **O agente é o responsável por esse registro**, usando a skill `registrar-trabalho` (`.claude/skills/registrar-trabalho/SKILL.md`): buscar issue existente, criar ou comentar antes de começar, citar `Refs #n` nos commits e fechar com um comentário de resultado ao concluir. Tipos nativos: `Feature`, `Bug`, `Task`. Labels de área: `area:ingestion`, `area:sql`, `area:monitoring`, `area:costs`, `area:infra`; `data` para mudança de schema ou dados.
+
 ## Pendências
 
-Nada registrado aqui ainda. Adicione o estado atual do trabalho e as próximas decisões nesta seção.
+A fonte da verdade é a lista de issues abertas, não este arquivo. Ao retomar o trabalho, comece por `list_issues` (estado aberto).
